@@ -47,6 +47,7 @@ function Replace-HTMLEntities {
     $text = $text -replace '&amp;', 'and'
     $text = $text -replace '&lt;', '<'
     $text = $text -replace '&gt;', '>'
+    $text = $text -replace '&deg;', '°'
     return $text
 }
 
@@ -110,8 +111,8 @@ function Show-Question {
         return $true
     }
     else {
-        Write-Host "Incorrect. " -ForegroundColor $incorrectColor -NoNewline
-        Write-Host "The correct answer is: " -NoNewline
+        Write-Host 'Incorrect. ' -ForegroundColor $incorrectColor -NoNewline
+        Write-Host 'The correct answer is: ' -NoNewline
         Write-Host $(Replace-HTMLEntities -text $question.correct_answer) -ForegroundColor $correctColor
         return $false
     }
@@ -195,7 +196,11 @@ function Show-StackedBarChart {
     # Determine the maximum length of category names
     $maxCategoryLength = ($stats.Categories.PSObject.Properties.Name | Measure-Object -Maximum Length).Maximum
 
-    foreach ($category in $stats.Categories.PSObject.Properties.Name) {
+    # Sort the categories
+    $sortedCategories = $stats.Categories.PSObject.Properties.Name | Sort-Object
+
+    # foreach ($category in $stats.Categories.PSObject.Properties.Name) {
+     foreach ($category in $sortedCategories) {
         $correct = $stats.Categories.$category.Correct
         $incorrect = $stats.Categories.$category.Incorrect
         $total = $correct + $incorrect
@@ -242,7 +247,7 @@ function Show-StackedBarChart {
 
         Write-Host "`nOverall Total".PadRight($maxCategoryLength + 3) -ForegroundColor White -NoNewline
         Write-Host ': ' -ForegroundColor White -NoNewline
-        Write-Host " asked: " -fore blue -NoNewline
+        Write-Host ' asked: ' -fore blue -NoNewline
         Write-Host "$($total.toString('0000'))   " -fore gray -NoNewline
         Write-Host ': ' -ForegroundColor White -NoNewline
         Write-Host "$overallCorrectPercentageStr% Correct " -ForegroundColor cyan -NoNewline
