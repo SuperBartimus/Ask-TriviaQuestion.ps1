@@ -24,8 +24,9 @@ Import-Module -Name Microsoft.PowerShell.Utility
 
 # Function to get random category
 function Get-RandomCategory {
-    $categories = 18, 20, 12, 14, 15, 17, 22, 28, 29, 30, 32
-    return $categories | Get-Random
+    # $categories = 18, 20, 12, 14, 15, 17, 22, 28, 29, 30, 32  # Scriptor's preferred categories
+    # return $categories | Get-Random
+    return (Get-Random -Minimum 1 -Maximum 32) # All categories from source
 }
 
 # Function to get question from OpenTDB
@@ -217,6 +218,9 @@ function Show-StackedBarChart {
         $paddedCategory = $category.PadRight($maxCategoryLength + 2)
 
         Write-Host "$($paddedCategory): " -NoNewline
+        Write-Host ' asked: ' -fore blue -NoNewline
+        Write-Host "$($total.toString('0000'))   " -fore gray -NoNewline
+        Write-Host ': ' -ForegroundColor White -NoNewline
         Write-Host "$correctPercentagestr% Correct " -ForegroundColor cyan -NoNewline
         Write-Host $correctBars -ForegroundColor Green -NoNewline
         Write-Host $incorrectBars -ForegroundColor Yellow -NoNewline
@@ -236,7 +240,10 @@ function Show-StackedBarChart {
         $overallCorrectBars = ('#' * ($overallCorrectPercentage / 2))
         $overallIncorrectBars = ('@' * ($overallIncorrectPercentage / 2))
 
-        Write-Host 'Overall Total'.PadRight($maxCategoryLength + 2) -ForegroundColor White -NoNewline
+        Write-Host "`nOverall Total".PadRight($maxCategoryLength + 3) -ForegroundColor White -NoNewline
+        Write-Host ': ' -ForegroundColor White -NoNewline
+        Write-Host " asked: " -fore blue -NoNewline
+        Write-Host "$($total.toString('0000'))   " -fore gray -NoNewline
         Write-Host ': ' -ForegroundColor White -NoNewline
         Write-Host "$overallCorrectPercentageStr% Correct " -ForegroundColor cyan -NoNewline
         Write-Host $overallCorrectBars -ForegroundColor Green -NoNewline
