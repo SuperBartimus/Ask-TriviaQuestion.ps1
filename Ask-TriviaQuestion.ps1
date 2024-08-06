@@ -29,13 +29,38 @@ function Get-RandomCategory {
     return (Get-Random -Minimum 1 -Maximum 32) # All categories from source
 }
 
+
 # Function to get question from OpenTDB
 function Get-Question {
-    $category = Get-RandomCategory
-    $url = "https://opentdb.com/api.php?amount=1&category=$category"
-    $response = Invoke-RestMethod -Uri $url
-    return $response.results[0]
+    $maxAttempts = 10
+    $attempt = 0
+    $lastErrorMessage = ''
+
+    while ($attempt -lt $maxAttempts) {
+        try {
+            $category = Get-RandomCategory
+            $url = "https://opentdb.com/api.php?amount=1&category=$category"
+            $response = Invoke-RestMethod -Uri $url
+
+            if ($response.results[0] -ne $null) {
+                return $response.results[0]
+            }
+        }
+        catch {
+            # Capture the error message
+            $lastErrorMessage = $_.Exception.Message
+        }
+
+        $attempt++
+        Write-Host "Attempt $attempt of $maxAttempts to fetch a question failed. Retrying..." -ForegroundColor DarkGray
+        Start-Sleep -Seconds 1  # Adding a short delay before retrying
+    }
+
+    Write-Host "Failed to retrieve a question after $maxAttempts attempts." -ForegroundColor Yellow
+    Write-Host "Last error message: $lastErrorMessage" -ForegroundColor Red
+    exit 1
 }
+
 
 # Function to replace HTML entities
 function Replace-HTMLEntities {
@@ -159,6 +184,7 @@ function Update-Stats {
 }
 
 # Function to display stats
+# deprecated -- see caller below for details.
 function Show-Stats {
     param (
         [Parameter(Mandatory = $true)]
@@ -200,7 +226,7 @@ function Show-StackedBarChart {
     $sortedCategories = $stats.Categories.PSObject.Properties.Name | Sort-Object
 
     # foreach ($category in $stats.Categories.PSObject.Properties.Name) {
-     foreach ($category in $sortedCategories) {
+    foreach ($category in $sortedCategories) {
         $correct = $stats.Categories.$category.Correct
         $incorrect = $stats.Categories.$category.Incorrect
         $total = $correct + $incorrect
