@@ -10,7 +10,7 @@
 
 .NOTES
     Author: Bart Strauss / Completely Computing
-    Version: 1.0
+    Version: 2024-08-06-1653
     Questions Sourced from: https://opentdb.com/api_config.php
 
 .EXAMPLE
@@ -21,6 +21,8 @@
 
 # Import necessary module
 Import-Module -Name Microsoft.PowerShell.Utility
+$global:esc = [char]27 # Sets the escape character
+$global:upOne = "$esc[1A" # Moves the cursor up one row to column 1
 
 # Function to get random category
 function Get-RandomCategory {
@@ -29,9 +31,12 @@ function Get-RandomCategory {
     return (Get-Random -Minimum 1 -Maximum 32) # All categories from source
 }
 
-
-# Function to get question from OpenTDB
 function Get-Question {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string[]]$askedQuestions
+    )
+
     $maxAttempts = 10
     $attempt = 0
     $lastErrorMessage = ''
@@ -43,7 +48,13 @@ function Get-Question {
             $response = Invoke-RestMethod -Uri $url
 
             if ($response.results[0] -ne $null) {
-                return $response.results[0]
+                $question = $response.results[0].question
+                if ($askedQuestions -notcontains $question) {
+                    return $response.results[0]
+                }
+                else {
+                    Write-Host 'Duplicate question detected. Retrying...' -ForegroundColor Yellow
+                }
             }
         }
         catch {
@@ -52,6 +63,8 @@ function Get-Question {
         }
 
         $attempt++
+
+        If ($attempt -gt 1) { Write-Host "$upOne" -NoNewline }
         Write-Host "Attempt $attempt of $maxAttempts to fetch a question failed. Retrying..." -ForegroundColor DarkGray
         Start-Sleep -Seconds 1  # Adding a short delay before retrying
     }
@@ -61,18 +74,63 @@ function Get-Question {
     exit 1
 }
 
-
 # Function to replace HTML entities
 function Replace-HTMLEntities {
     param (
         [string]$text
     )
-    $text = $text -replace '&quot;', '"'
-    $text = $text -replace '&#039;', "'"
-    $text = $text -replace '&amp;', 'and'
-    $text = $text -replace '&lt;', '<'
-    $text = $text -replace '&gt;', '>'
-    $text = $text -replace '&deg;', '°'
+
+    $text = $text -replace '&#039;' , "'"
+    $text = $text -replace '&alefsym;' , 'ℵ'
+    $text = $text -replace '&amp;' , '&'
+    $text = $text -replace '&amp;' , 'and'
+    $text = $text -replace '&bdquo;' , '„'
+    $text = $text -replace '&bull;' , '•'
+    $text = $text -replace '&cent;' , '¢'
+    $text = $text -replace '&clubs;' , '♣'
+    $text = $text -replace '&copy;' , '©'
+    $text = $text -replace '&deg;' , '°'
+    $text = $text -replace '&diams;' , '♦'
+    $text = $text -replace '&divide;' , '÷'
+    $text = $text -replace '&euro;' , '€'
+    $text = $text -replace '&frasl;' , '⁄'
+    $text = $text -replace '&gt;' , '>'
+    $text = $text -replace '&hearts;' , '♥'
+    $text = $text -replace '&hellip;' , '…'
+    $text = $text -replace '&iacute;' , 'í'
+    $text = $text -replace '&iexcl;' , '¡'
+    $text = $text -replace '&image;' , 'ℑ'
+    $text = $text -replace '&ldquo;' , '“'
+    $text = $text -replace '&lsaquo;' , '‹'
+    $text = $text -replace '&lsquo;' , "`‘"
+    $text = $text -replace '&lt;' , '<'
+    $text = $text -replace '&mdash;' , ' — '
+    $text = $text -replace '&micro;' , 'µ'
+    $text = $text -replace '&middot;' , '·'
+    $text = $text -replace '&nbsp;' , '(space)'
+    $text = $text -replace '&ndash;' , ' – '
+    $text = $text -replace '&oline;' , '‾'
+    $text = $text -replace '&para;' , '¶'
+    $text = $text -replace '&permil;' , '‰'
+    $text = $text -replace '&plusmn;' , '±'
+    $text = $text -replace '&pound;' , '£'
+    $text = $text -replace '&prime;' , '′'
+    $text = $text -replace '&Prime;' , '″'
+    $text = $text -replace '&quot;' , '"'
+    $text = $text -replace '&rdquo;' , '”'
+    $text = $text -replace '&real;' , 'ℜ'
+    $text = $text -replace '&reg;' , '®'
+    $text = $text -replace '&rsaquo;' , '›'
+    $text = $text -replace '&rsquo;' , "`’"
+    $text = $text -replace '&sbquo; ' , "`‚"
+    $text = $text -replace '&sect;' , '§'
+    $text = $text -replace '&spades;' , '♠'
+    $text = $text -replace '&times;' , '×'
+    $text = $text -replace '&trade;' , '™'
+    $text = $text -replace '&uuml;' , 'ü'
+    $text = $text -replace '&weierp;' , '℘'
+    $text = $text -replace '&yen;' , '¥'
+
     return $text
 }
 
@@ -156,7 +214,7 @@ function Update-Stats {
     $sanitizedCategory = Sanitize-CategoryName -category $category
 
     if (-Not (Test-Path -LiteralPath $statsFile)) {
-        $stats = [pscustomobject]@{ Categories = [ordered]@{} }
+        $stats = [pscustomobject]@{ Categories = [ordered]@{}; Questions = @() }
     }
     else {
         $stats = Get-Content -Raw -LiteralPath $statsFile | ConvertFrom-Json
@@ -183,31 +241,58 @@ function Update-Stats {
     return $stats
 }
 
-# Function to display stats
-# deprecated -- see caller below for details.
-function Show-Stats {
+# Function to update the list of asked questions
+function Update-AskedQuestions {
     param (
         [Parameter(Mandatory = $true)]
-        [pscustomobject]$stats
+        [string[]]$askedQuestions,
+        [Parameter(Mandatory = $true)]
+        [string]$question
     )
 
-    $totalCorrect = 0
-    $totalQuestions = 0
+    if (-Not (Test-Path -LiteralPath $statsFile)) {
+        $stats = [pscustomobject]@{ Categories = [ordered]@{}; Questions = @() }
+    }
+    else {
+        $stats = Get-Content -Raw -LiteralPath $statsFile | ConvertFrom-Json
 
-    Write-Host 'Category Stats:' -ForegroundColor 'Yellow'
-
-    foreach ($category in $stats.Categories.PSObject.Properties.Name) {
-        $correct = $stats.Categories.$category.Correct
-        $incorrect = $stats.Categories.$category.Incorrect
-        $totalCorrect += $correct
-        $totalQuestions += ($correct + $incorrect)
-        $categoryAccuracy = if ($correct + $incorrect -eq 0) { 0 } else { [math]::Round(($correct / ($correct + $incorrect)) * 100, 2) }
-        Write-Host "${category}: ${correct} correct, ${incorrect} incorrect, Accuracy: ${categoryAccuracy}%" -ForegroundColor 'Cyan'
+        # Ensure the Questions section exists
+        if (-Not $stats.PSObject.Properties['Questions']) {
+            $stats | Add-Member -MemberType NoteProperty -Name 'Questions' -Value @()
+        }
     }
 
-    $overallAccuracy = if ($totalQuestions -eq 0) { 0 } else { [math]::Round(($totalCorrect / $totalQuestions) * 100, 2) }
-    Write-Host "Overall Accuracy: ${overallAccuracy}%" -ForegroundColor 'Cyan'
+    # Replace HTML entities in the question text
+    $question = Replace-HTMLEntities -text $question
+
+    # Add the current question to the list of asked questions if it's not already there
+    $questionExists = $false
+    $askedQuestions | ForEach-Object {
+        if ($_ -eq $question) {
+            $questionExists = $true
+        }
+    }
+
+    if (-not $questionExists) {
+        $askedQuestions += $question
+    }
+
+    # Remove the placeholder question "Does 5 + 4 = 10 ?" if it exists
+    $askedQuestions = $askedQuestions | Where-Object { $_ -ne 'Does 5 + 4 = 10 ?' }
+
+    # Save the updated list of asked questions
+    $stats.Questions = $askedQuestions
+
+    $statsJson = $stats | ConvertTo-Json -Depth 10
+    $statsJson | Set-Content -LiteralPath $statsFile
+
+    return $stats
 }
+
+
+
+
+
 
 
 # Function to display stacked bar charts
@@ -285,28 +370,56 @@ function Show-StackedBarChart {
 
 # Main script logic
 $username = $env:USERNAME
-$scriptName = $MyInvocation.MyCommand.Name # have to perform command her otherwise it populates the name of the function its placed in.
+$scriptName = $MyInvocation.MyCommand.Name # have to perform command here otherwise it populates the name of the function it's placed in.
 $global:statsFile = "$PSScriptRoot\$scriptName-stats-$username.json"
 
-# Create stats file if it doesn't exist.  Necessary here because showing stats for non-existent file creates 'division by zero' errors
+# Create or upgrade stats file if necessary
 if (-Not (Test-Path -LiteralPath $statsFile)) {
-    $stats = [pscustomobject]@{ Categories = [ordered]@{} }
+    $stats = [pscustomobject]@{ Categories = [ordered]@{}; Questions = @() }
 
     $statsJson = $stats | ConvertTo-Json -Depth 10
     $statsJson | Set-Content -LiteralPath $statsFile
 
-    Write-Host 'Created stats file: ' -NoNewline -fore DarkBlue
-    Write-Host $statsFile -ForegroundColor darkgray
+    Write-Host 'Created stats file: ' -NoNewline -ForegroundColor DarkBlue
+    Write-Host $statsFile -ForegroundColor DarkGray
+}
+else {
+    $stats = Get-Content -Raw -LiteralPath $statsFile | ConvertFrom-Json
+
+    # Ensure the Categories section exists
+    if (-Not $stats.PSObject.Properties['Categories']) {
+        $stats | Add-Member -MemberType NoteProperty -Name 'Categories' -Value ([ordered]@{})
+    }
+
+    # Ensure the Questions section exists
+    if (-Not $stats.PSObject.Properties['Questions']) {
+        $stats | Add-Member -MemberType NoteProperty -Name 'Questions' -Value @()
+    }
 }
 
-$question = Get-Question
-$correct = Show-Question -question $question
-$stats = Update-Stats -category $question.category -correct $correct
+# Initialize the list of asked questions
+$askedQuestions = $stats.Questions
 
+# Assign a default question if askedQuestions is empty
+if ($askedQuestions.Count -eq 0) {
+    $askedQuestions = @('Does 5 + 4 = 10 ?')
+}
+
+# Get a question from online
+$question = Get-Question -askedQuestions $askedQuestions
+
+#ask the question retrieved
+$correct = Show-Question -question $question
+
+# update the JSON file for the user
+$stats = Update-Stats -category $question.category -correct $correct
+$stats = Update-AskedQuestions -askedQuestions $askedQuestions -question $question.question
+
+# Show the user stats
 Write-Host ''
-# Show-Stats -stats $stats  # removed this function call as the barchart function is nicer.  Left code for 'just in case'
 Show-StackedBarChart -stats $stats
 
 Write-Host ''
-Write-Host 'Stats saved to: ' -NoNewline -fore DarkBlue
-Write-Host $statsFile -ForegroundColor darkgray
+Write-Host 'Stats saved to: ' -NoNewline -ForegroundColor DarkBlue
+Write-Host $statsFile -ForegroundColor DarkGray
+Exit 0
